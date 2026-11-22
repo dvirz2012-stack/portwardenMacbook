@@ -6,63 +6,46 @@ class PortScanner {
 
     fun scanListeningPorts(): List<PortInfo>{
 
-        val results = mutableListOf<PortInfo>
-        val pidToNameMap = mutableMapOf<Long, String>
-        val tasklistProcessBuilder = ProcessBuilder("zsh.exe", "/c", "ps -ax").start()
+        val results = mutableListOf<PortInfo>()
+        val lsofProcess = ProcessBuilder("lsof", "-n", "-P", "-iTCP", "-sTCP:LISTEN", "+c", "0").start()
 
-        tasklistProcessBuilder.InputStream.bufferedReader().useLines {lines ->
+        lsofProcess.inputStream.bufferedReader().useLines {lines ->
 
-            lines.forEach {line ->
+            lines.drop(1).forEach {line ->
 
-                val parts = lines.replace("\"", "").split(",")
-                if (parts.size >= 2){
+                val parts = line.trim().split(Regex("\\s+"))
+                if (parts.size < 3) return@forEach
 
-                    val name = parts[0]
-                    val currentPid = parts[1].toLongOrNull()
-                    if (currentPid != null){
+                val processName = parts[0].replace("\\x20", " ")
+                val pid = parts[1].toLongOrNull() ?: return@forEach
 
-                        pidToNameMap[currentPid] = name
+                val address = parts[parts.size - 2]
+                val port = address.substringAfterLast(":").toIntOrNull() ?: return@forEach
 
-                    }
-
-                }
-
-
-            }
-
-        }
-
-        val listeningPortsProcessBuilder("zsh.exe", "/c", "nmap 192.168.1.1")
-
-        listeningPortsProcessBuilder.InputStream.bufferedReader().useLines {lines ->
-
-            lines.filter{it.contains("LISTENING")}.forEach {line ->
-
-                val newLine: String = line.trim()
-                val newLineNoWhitespaces: List<String> = newLine.split("\\s+", "")
-                val addressString = newLineNoWhtieSpaces[1]
-                val pid = newLineNoWhitespaces[4].toLong()
-                val port = addressString.substringAfterLast(":").toInt()
-                val processName = pidToNameMap[pid] ?: "unknown"
                 results.add(PortInfo(port, pid, processName))
 
             }
 
         }
 
+        lsofProcess.waitFor()
+
         return results.distinct()
 
     }
 
-    fun isKillable(targetPort: Int, targetPid: long): Boolean{
+    fun isKillable(targetPort: Int, targetPid: Long): Boolean{
 
         return scanListeningPorts().any {
 
-            it.port == targetPort && it.pid == targetPid
+            it.portNumber == targetPort && it.pid == targetPid
 
         }
 
     }
+
+
+}
 
 
 }
